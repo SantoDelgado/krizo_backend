@@ -1,0 +1,599 @@
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Float, DateTime, Enum, JSON, Text, Date
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from datetime import datetime
+import enum
+
+from .database import Base
+
+class UserType(str, enum.Enum):
+    PERSONAL = "PERSONAL"
+    BUSINESS = "BUSINESS"
+    SERVICE_PROVIDER = "SERVICE_PROVIDER"
+
+class VerificationStatus(enum.Enum):
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+
+class PaymentStatus(str, enum.Enum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    REFUNDED = "refunded"
+
+class PaymentMethod(str, enum.Enum):
+    CREDIT_CARD = "credit_card"
+    DEBIT_CARD = "debit_card"
+    BANK_TRANSFER = "bank_transfer"
+    WALLET = "wallet"
+    PAYPAL = "paypal"
+    BINANCE_PAY = "binance_pay"
+    CRYPTO = "crypto"
+
+class TransactionType(str, enum.Enum):
+    DEPOSIT = "deposit"
+    WITHDRAWAL = "withdrawal"
+    PAYMENT = "payment"
+    REFUND = "refund"
+    COMMISSION = "commission"
+
+class PromotionType(str, enum.Enum):
+    PERCENTAGE = "percentage"
+    FIXED_AMOUNT = "fixed_amount"
+    FREE_DELIVERY = "free_delivery"
+    LOYALTY_POINTS = "loyalty_points"
+
+class PromotionStatus(str, enum.Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    EXPIRED = "expired"
+    SCHEDULED = "scheduled"
+
+class NotificationType(str, enum.Enum):
+    ORDER_STATUS = "order_status"
+    PAYMENT = "payment"
+    PROMOTION = "promotion"
+    LOYALTY = "loyalty"
+    SYSTEM = "system"
+
+class NotificationPriority(str, enum.Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    URGENT = "urgent"
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    phone = Column(String, unique=True, index=True)
+    cedula = Column(String, unique=True, index=True)  # Cédula de identidad única
+    hashed_password = Column(String)
+    user_type = Column(Enum(UserType))
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Información personal
+    first_name = Column(String)
+    last_name = Column(String)
+    birth_date = Column(DateTime)
+    address = Column(String)
+    face_photo_url = Column(String)
+    id_card_photo_url = Column(String)
+    
+    # Verificación
+    verification_status = Column(Enum(VerificationStatus), default=VerificationStatus.PENDING)
+    verification_documents = Column(JSON)
+    
+    # Wallet
+    wallet_balance = Column(Float, default=0.0)
+    
+    # Relaciones
+    business_profile = relationship("BusinessProfile", back_populates="user", uselist=False)
+    service_profile = relationship("ServiceProfile", back_populates="user", uselist=False)
+    deliveries = relationship("Delivery", back_populates="user")
+    wallet = relationship("Wallet", back_populates="user", uselist=False)
+    transactions = relationship("Transaction", back_populates="user")
+    payment_methods = relationship("PaymentMethod", back_populates="user")
+    promotion_redemptions = relationship("PromotionRedemption", back_populates="user")
+    loyalty_memberships = relationship("LoyaltyMember", back_populates="user")
+    notifications = relationship("Notification", back_populates="user")
+    notification_preferences = relationship("NotificationPreference", back_populates="user", uselist=False)
+    device_tokens = relationship("DeviceToken", back_populates="user")
+    ratings = relationship("Rating", back_populates="user")
+    reports = relationship("Report", back_populates="user")
+    analytics = relationship("Analytics", back_populates="user")
+    dashboards = relationship("Dashboard", back_populates="user")
+    admin_profile = relationship("AdminUser", back_populates="user", uselist=False)
+    # audit_logs = relationship("AuditLog", back_populates="user")
+
+class BusinessProfile(Base):
+    __tablename__ = "business_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    business_name = Column(String)
+    rif_number = Column(String)
+    rif_document_url = Column(String)
+    business_address = Column(String)
+    permits = Column(JSON)
+    verification_status = Column(Enum(VerificationStatus), default=VerificationStatus.PENDING)
+    location = Column(JSON)  # {lat: float, lng: float}
+    description = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relaciones
+    user = relationship("User", back_populates="business_profile")
+    products = relationship("Product", back_populates="business")
+    services = relationship("Service", back_populates="business_profile")
+    promotions = relationship("Promotion", back_populates="business_profile")
+    loyalty_program = relationship("LoyaltyProgram", back_populates="business_profile", uselist=False)
+    ratings = relationship("Rating", back_populates="business")
+    rating_responses = relationship("RatingResponse", back_populates="business")
+    reports = relationship("Report", back_populates="business")
+    analytics = relationship("Analytics", back_populates="business")
+    dashboards = relationship("Dashboard", back_populates="business")
+
+class ServiceProfile(Base):
+    __tablename__ = "service_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    service_name = Column(String)
+    service_type = Column(Enum(UserType))
+    is_available = Column(Boolean, default=True)
+    base_price = Column(Float)
+    price_per_km = Column(Float, nullable=True)
+    service_radius = Column(Float, nullable=True)  # Radio de cobertura en kilómetros
+    working_hours = Column(JSON)
+    description = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relaciones
+    user = relationship("User", back_populates="service_profile")
+    services = relationship("Service", back_populates="service_profile")
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("business_profiles.id"))
+    name = Column(String)
+    description = Column(String)
+    price = Column(Float)
+    quantity = Column(Integer)
+    images = Column(JSON)  # URLs de las imágenes
+    is_available = Column(Boolean, default=True)
+    
+    # Relaciones
+    business = relationship("BusinessProfile", back_populates="products")
+
+class Service(Base):
+    __tablename__ = "services"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_profile_id = Column(Integer, ForeignKey("business_profiles.id"))
+    service_profile_id = Column(Integer, ForeignKey("service_profiles.id"))
+    name = Column(String)
+    description = Column(String)
+    price = Column(Float)
+    is_available = Column(Boolean, default=True)
+    promotion_status = Column(Boolean, default=False)
+    promotion_end_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relaciones
+    business_profile = relationship("BusinessProfile", back_populates="services")
+    service_profile = relationship("ServiceProfile", back_populates="services")
+    deliveries = relationship("Delivery", back_populates="service")
+    ratings = relationship("Rating", back_populates="service")
+    reports = relationship("Report", back_populates="service")
+
+class Delivery(Base):
+    __tablename__ = "deliveries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    service_id = Column(Integer, ForeignKey("services.id"))
+    status = Column(String)  # pending, accepted, in_progress, completed, cancelled
+    pickup_location = Column(JSON)  # {lat: float, lng: float, address: str}
+    delivery_location = Column(JSON)  # {lat: float, lng: float, address: str}
+    total_price = Column(Float)
+    notes = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Relaciones
+    user = relationship("User", back_populates="deliveries")
+    service = relationship("Service", back_populates="deliveries")
+    rating = relationship("Rating", back_populates="delivery", uselist=False)
+    reports = relationship("Report", back_populates="delivery")
+
+class Wallet(Base):
+    __tablename__ = "wallets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    balance = Column(Float, default=0.0)
+    currency = Column(String, default="USD")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relaciones
+    user = relationship("User", back_populates="wallet")
+    transactions = relationship("Transaction", back_populates="wallet")
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    wallet_id = Column(Integer, ForeignKey("wallets.id"))
+    amount = Column(Float)
+    type = Column(Enum(TransactionType))
+    status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING)
+    description = Column(String)
+    meta_data = Column(JSON)  # Para almacenar información adicional como IDs de servicios, deliveries, etc.
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relaciones
+    user = relationship("User", back_populates="transactions")
+    wallet = relationship("Wallet", back_populates="transactions")
+    payment = relationship("Payment", back_populates="transaction", uselist=False)
+    promotion_redemption = relationship("PromotionRedemption", back_populates="transaction", uselist=False)
+    loyalty_transaction = relationship("LoyaltyTransaction", back_populates="transaction", uselist=False)
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), unique=True)
+    payment_method_id = Column(Integer, ForeignKey("payment_methods.id"))
+    amount = Column(Float)
+    currency = Column(String, default="USD")
+    crypto_currency = Column(String, nullable=True)  # Para pagos en crypto (BTC, ETH, BNB, etc.)
+    crypto_amount = Column(Float, nullable=True)  # Cantidad en crypto
+    status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING)
+    payment_provider = Column(String)  # Stripe, PayPal, Binance, etc.
+    payment_provider_id = Column(String)  # ID de la transacción en el proveedor
+    binance_prepay_id = Column(String, nullable=True)  # ID de prepago de Binance
+    binance_qr_code = Column(String, nullable=True)  # QR code para pagos Binance
+    binance_deep_link = Column(String, nullable=True)  # Deep link para app Binance
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relaciones
+    transaction = relationship("Transaction", back_populates="payment")
+    payment_method = relationship("PaymentMethod", back_populates="payments")
+
+class PaymentMethod(Base):
+    __tablename__ = "payment_methods"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    type = Column(Enum(PaymentMethod))
+    is_default = Column(Boolean, default=False)
+    details = Column(JSON)  # Información encriptada de la tarjeta/cuenta
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relaciones
+    user = relationship("User", back_populates="payment_methods")
+    payments = relationship("Payment", back_populates="payment_method")
+
+class Promotion(Base):
+    __tablename__ = "promotions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_profile_id = Column(Integer, ForeignKey("business_profiles.id"))
+    name = Column(String)
+    description = Column(String)
+    type = Column(Enum(PromotionType))
+    value = Column(Float)  # Porcentaje o monto fijo
+    min_purchase = Column(Float, nullable=True)  # Monto mínimo de compra
+    max_discount = Column(Float, nullable=True)  # Descuento máximo
+    start_date = Column(DateTime(timezone=True))
+    end_date = Column(DateTime(timezone=True))
+    status = Column(Enum(PromotionStatus), default=PromotionStatus.SCHEDULED)
+    code = Column(String, unique=True)  # Código promocional
+    usage_limit = Column(Integer, nullable=True)  # Límite de usos
+    usage_count = Column(Integer, default=0)  # Contador de usos
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relaciones
+    business_profile = relationship("BusinessProfile", back_populates="promotions")
+    redemptions = relationship("PromotionRedemption", back_populates="promotion")
+
+class PromotionRedemption(Base):
+    __tablename__ = "promotion_redemptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    promotion_id = Column(Integer, ForeignKey("promotions.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    transaction_id = Column(Integer, ForeignKey("transactions.id"))
+    amount_saved = Column(Float)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relaciones
+    promotion = relationship("Promotion", back_populates="redemptions")
+    user = relationship("User", back_populates="promotion_redemptions")
+    transaction = relationship("Transaction", back_populates="promotion_redemption")
+
+class LoyaltyProgram(Base):
+    __tablename__ = "loyalty_programs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_profile_id = Column(Integer, ForeignKey("business_profiles.id"))
+    name = Column(String)
+    description = Column(String)
+    points_per_currency = Column(Float)  # Puntos por unidad de moneda
+    min_points_redemption = Column(Integer)  # Mínimo de puntos para canjear
+    points_value = Column(Float)  # Valor de los puntos en moneda
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relaciones
+    business_profile = relationship("BusinessProfile", back_populates="loyalty_program")
+    members = relationship("LoyaltyMember", back_populates="loyalty_program")
+
+class LoyaltyMember(Base):
+    __tablename__ = "loyalty_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    loyalty_program_id = Column(Integer, ForeignKey("loyalty_programs.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    points_balance = Column(Integer, default=0)
+    total_points_earned = Column(Integer, default=0)
+    total_points_redeemed = Column(Integer, default=0)
+    tier = Column(String, default="basic")  # Nivel de fidelización
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relaciones
+    loyalty_program = relationship("LoyaltyProgram", back_populates="members")
+    user = relationship("User", back_populates="loyalty_memberships")
+    transactions = relationship("LoyaltyTransaction", back_populates="member")
+
+class LoyaltyTransaction(Base):
+    __tablename__ = "loyalty_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    loyalty_member_id = Column(Integer, ForeignKey("loyalty_members.id"))
+    transaction_id = Column(Integer, ForeignKey("transactions.id"))
+    points = Column(Integer)  # Puntos ganados o canjeados
+    type = Column(String)  # earn o redeem
+    description = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relaciones
+    member = relationship("LoyaltyMember", back_populates="transactions")
+    transaction = relationship("Transaction", back_populates="loyalty_transaction")
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    type = Column(Enum(NotificationType))
+    priority = Column(Enum(NotificationPriority), default=NotificationPriority.MEDIUM)
+    title = Column(String)
+    message = Column(String)
+    data = Column(JSON, nullable=True)  # Datos adicionales específicos del tipo de notificación
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    read_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relaciones
+    user = relationship("User", back_populates="notifications")
+
+class NotificationPreference(Base):
+    __tablename__ = "notification_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    email_enabled = Column(Boolean, default=True)
+    push_enabled = Column(Boolean, default=True)
+    sms_enabled = Column(Boolean, default=False)
+    order_updates = Column(Boolean, default=True)
+    payment_updates = Column(Boolean, default=True)
+    promotion_updates = Column(Boolean, default=True)
+    loyalty_updates = Column(Boolean, default=True)
+    system_updates = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relaciones
+    user = relationship("User", back_populates="notification_preferences")
+
+class DeviceToken(Base):
+    __tablename__ = "device_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    token = Column(String, unique=True)
+    device_type = Column(String)  # ios, android, web
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relaciones
+    user = relationship("User", back_populates="device_tokens")
+
+class Rating(Base):
+    __tablename__ = "ratings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    business_id = Column(Integer, ForeignKey("business_profiles.id"), nullable=False)
+    service_id = Column(Integer, ForeignKey("services.id"), nullable=True)
+    delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=True)
+    rating = Column(Integer, nullable=False)  # 1-5 estrellas
+    review = Column(Text, nullable=True)
+    is_anonymous = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relaciones
+    user = relationship("User", back_populates="ratings")
+    business = relationship("BusinessProfile", back_populates="ratings")
+    service = relationship("Service", back_populates="ratings")
+    delivery = relationship("Delivery", back_populates="rating")
+    images = relationship("ReviewImage", back_populates="rating")
+    responses = relationship("RatingResponse", back_populates="rating")
+
+class ReviewImage(Base):
+    __tablename__ = "review_images"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    rating_id = Column(Integer, ForeignKey("ratings.id"), nullable=False)
+    image_url = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relaciones
+    rating = relationship("Rating", back_populates="images")
+
+class RatingResponse(Base):
+    __tablename__ = "rating_responses"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    rating_id = Column(Integer, ForeignKey("ratings.id"), nullable=False)
+    business_id = Column(Integer, ForeignKey("business_profiles.id"), nullable=False)
+    response = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relaciones
+    rating = relationship("Rating", back_populates="responses")
+    business = relationship("BusinessProfile", back_populates="rating_responses")
+
+class Report(Base):
+    __tablename__ = "reports"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    business_id = Column(Integer, ForeignKey("business_profiles.id"), nullable=True)
+    service_id = Column(Integer, ForeignKey("services.id"), nullable=True)
+    delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=True)
+    report_type = Column(String, nullable=False)  # 'delivery', 'service', 'business', 'user'
+    reason = Column(String, nullable=False)  # 'inappropriate', 'fraud', 'quality', 'other'
+    description = Column(Text, nullable=True)
+    status = Column(String, default='pending')  # 'pending', 'investigating', 'resolved', 'dismissed'
+    admin_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relaciones
+    user = relationship("User", back_populates="reports")
+    business = relationship("BusinessProfile", back_populates="reports")
+    service = relationship("Service", back_populates="reports")
+    delivery = relationship("Delivery", back_populates="reports")
+
+class Analytics(Base):
+    __tablename__ = "analytics"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("business_profiles.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    metric_type = Column(String, nullable=False)  # 'revenue', 'orders', 'users', 'deliveries'
+    metric_value = Column(Float, nullable=False)
+    period = Column(String, nullable=False)  # 'daily', 'weekly', 'monthly', 'yearly'
+    date = Column(Date, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relaciones
+    business = relationship("BusinessProfile", back_populates="analytics")
+    user = relationship("User", back_populates="analytics")
+
+class Dashboard(Base):
+    __tablename__ = "dashboards"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    business_id = Column(Integer, ForeignKey("business_profiles.id"), nullable=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    config = Column(JSON, nullable=True)  # Configuración del dashboard
+    is_default = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relaciones
+    user = relationship("User", back_populates="dashboards")
+    business = relationship("BusinessProfile", back_populates="dashboards")
+
+class SystemConfig(Base):
+    __tablename__ = "system_configs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, nullable=False)
+    value = Column(JSON, nullable=False)
+    description = Column(Text, nullable=True)
+    is_public = Column(Boolean, default=False)  # Si es visible para usuarios
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    role = Column(String, nullable=False)  # 'super_admin', 'admin', 'moderator'
+    permissions = Column(JSON, nullable=True)  # Permisos específicos
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relaciones
+    user = relationship("User", back_populates="admin_profile")
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    admin_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    action = Column(String, nullable=False)  # 'create', 'update', 'delete', 'login', etc.
+    resource_type = Column(String, nullable=False)  # 'user', 'business', 'delivery', etc.
+    resource_id = Column(Integer, nullable=True)
+    details = Column(JSON, nullable=True)  # Detalles de la acción
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relaciones
+    # admin_user = relationship("AdminUser", back_populates="audit_logs")
+    # user = relationship("User", back_populates="audit_logs")
+
+class MaintenanceMode(Base):
+    __tablename__ = "maintenance_mode"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    is_active = Column(Boolean, default=False)
+    message = Column(Text, nullable=True)
+    allowed_ips = Column(JSON, nullable=True)  # IPs permitidas durante mantenimiento
+    start_time = Column(DateTime, nullable=True)
+    end_time = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class Location(Base):
+    __tablename__ = "locations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    address = Column(String, nullable=True)
+    city = Column(String, nullable=True)
+    state = Column(String, nullable=True)
+    country = Column(String, nullable=True)
+    postal_code = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now()) 
